@@ -1,5 +1,7 @@
 plugins:
   - serverless-appsync-plugin
+  - serverless-offline
+  - serverless-appsync-offline
 
 service: cp-api # NOTE: update this with your service name
 
