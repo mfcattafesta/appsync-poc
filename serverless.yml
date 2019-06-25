@@ -1,105 +1,111 @@
-# Welcome to Serverless!
-#
-# This file is the main config file for your service.
-# It's very minimal at this point and uses default values.
-# You can always add more config options for more control.
-# We've included some commented out config examples here.
-# Just uncomment any of them to get that config option.
-#
-# For full config options, check the docs:
-#    docs.serverless.com
-#
-# Happy Coding!
+plugins:
+  - serverless-appsync-plugin
 
-service: appsync-graphql-api # NOTE: update this with your service name
-
-# You can pin your service to only deploy with a specific Serverless version
-# Check out our docs for more details
-# frameworkVersion: "=X.X.X"
+service: cp-api # NOTE: update this with your service name
 
 provider:
   name: aws
   runtime: nodejs8.10
-
-# you can overwrite defaults here
-#  stage: dev
-#  region: us-east-1
-
-# you can add statements to the Lambda function's IAM Role here
-#  iamRoleStatements:
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:ListBucket"
-#      Resource: { "Fn::Join" : ["", ["arn:aws:s3:::", { "Ref" : "ServerlessDeploymentBucket" } ] ]  }
-#    - Effect: "Allow"
-#      Action:
-#        - "s3:PutObject"
-#      Resource:
-#        Fn::Join:
-#          - ""
-#          - - "arn:aws:s3:::"
-#            - "Ref" : "ServerlessDeploymentBucket"
-#            - "/*"
-
-# you can define service wide environment variables here
-#  environment:
-#    variable1: value1
-
-# you can add packaging information here
-#package:
-#  include:
-#    - include-me.js
-#    - include-me-dir/**
-#  exclude:
-#    - exclude-me.js
-#    - exclude-me-dir/**
+  stage: dev
+  region: us-east-1
 
 functions:
   hello:
     handler: handler.hello
 
-#    The following are a few example events you can configure
-#    NOTE: Please make sure to change your handler code to work with those events
-#    Check the event documentation for details
-#    events:
-#      - http:
-#          path: users/create
-#          method: get
-#      - websocket: $connect
-#      - s3: ${env:BUCKET}
-#      - schedule: rate(10 minutes)
-#      - sns: greeter-topic
-#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
-#      - alexaSkill: amzn1.ask.skill.xx-xx-xx-xx
-#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
-#      - iot:
-#          sql: "SELECT * FROM 'some_topic'"
-#      - cloudwatchEvent:
-#          event:
-#            source:
-#              - "aws.ec2"
-#            detail-type:
-#              - "EC2 Instance State-change Notification"
-#            detail:
-#              state:
-#                - pending
-#      - cloudwatchLog: '/aws/lambda/hello'
-#      - cognitoUserPool:
-#          pool: MyUserPool
-#          trigger: PreSignUp
+resources:
+  Resources:
+    CoreProfileDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: hash_key
+            AttributeType: S
+          -
+            AttributeName: range_key
+            AttributeType: S 
+          -
+            AttributeName: gsi1_hash_key
+            AttributeType: S
+          -
+            AttributeName: gsi1_range_key
+            AttributeType: S
+          -
+            AttributeName: gsi2_hash_key
+            AttributeType: S
+          -
+            AttributeName: gsi2_range_key
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: hash_key
+            KeyType: HASH
+          -
+            AttributeName: range_key
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        TableName: ${self:custom.tableName}
+        GlobalSecondaryIndexes:
+        - IndexName: ${self:custom.tableName}-gsi1
+          KeySchema:
+          - AttributeName: gsi1_hash_key
+            KeyType: HASH
+          - AttributeName: gsi1_range_key
+            KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ${self:custom.tableName}-gsi2
+          KeySchema:
+          - AttributeName: gsi2_hash_key
+            KeyType: HASH
+          - AttributeName: gsi2_range_key
+            KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
 
-#    Define function environment variables here
-#    environment:
-#      variable2: value2
-
-# you can add CloudFormation resource templates here
-#resources:
-#  Resources:
-#    NewResource:
-#      Type: AWS::S3::Bucket
-#      Properties:
-#        BucketName: my-new-bucket
-#  Outputs:
-#     NewOutput:
-#       Description: "Description for the output"
-#       Value: "Some output value"
+custom:
+  tableName: ${self:service}-${self:custom.stage}-data
+  stage: ${self:provider.stage}
+  appSync:
+    name: graphql-api
+    authenticationType: API_KEY
+    schema: schema.graphql
+    dataSources:
+      - type: AMAZON_DYNAMODB
+        name: ${self:service}-${self:custom.stage}-data
+        description: "DynamoDB POC Table"
+        config:
+          tableName: { Ref: CoreProfileDynamoDBTable }
+        iamRoleStatements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:DeleteItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+            - dynamodb:DescribeStream
+            - dynamodb:GetRecords
+            - dynamodb:GetShardIterator
+            - dynamodb:ListStreams
+          Resource:
+            - "Fn::GetAtt": [ CoreProfileDynamoDBTable, Arn ]
+            - Fn::Join:
+              - "/"
+              -
+                - { "Fn::GetAtt": ["CoreProfileDynamoDBTable", "Arn" ] }
+                - "index/*"
+    mappingTemplates:
+      - dataSource: graphql-api
+        type: Query
+        field: listContacts
+        request: "listContacts-request.vtl"
+        response: "listContacts-response.vtl"

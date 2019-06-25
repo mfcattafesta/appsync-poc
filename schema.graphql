@@ -1,0 +1,22 @@
+type Contact {
+    hash_key: String
+    range_key: String
+}
+
+type PaginatedContacts {
+    contacts: [Contact!]!
+    nextToken: String
+}
+
+type Query {
+    listContacts(limit: Int, nextToken: String): PaginatedContacts!
+}
+
+type Mutation {
+    saveContacts(hash_key: String, range_key: String): Contact
+}
+
+type Schema {
+    query: Query
+    mutation: Mutation
+}
